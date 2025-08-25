@@ -10,9 +10,7 @@ node {
     def dockerFile     = "Dockerfile"
     def imageName      = "${dockerRepo}/${imagePrefix}/${project}"
     def buildNumber    = env.BUILD_NUMBER
-    def branchNameRaw  = env.BRANCH_NAME ?: "main"
-    // sanitize tag cho an toàn
-    def branchName     = branchNameRaw.replaceAll('[^A-Za-z0-9_.-]','-')
+    def branchName  = env.BRANCH_NAME ?: "main"
 
     // K8s
     def k8sProjectName = "fork-okta-spring-boot-sample"      // tên Deployment & container trong K8s
@@ -23,7 +21,6 @@ node {
 
     // Nexus & Registry credentials
     def NEXUS_MIRROR   = "http://192.168.137.128:8081/repository/maven-central/"
-#    def dockerCredId   = "harbor-cred"   // Jenkins Credentials ID (username+password)
 
     stage('Workspace Clearing') { cleanWs() }
 
