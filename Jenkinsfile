@@ -18,7 +18,6 @@ node {
 
     // Maven & JDK tools
     def mvnHome = tool 'apache-maven-3.9.11'
-    def jdkHome = tool name: 'jdk-21', type: 'jdk'          // bạn đã có Java 21 trên agent
 
     // Nexus & Registry credentials
     // Nên dùng group "maven-public" nếu bạn đã tạo; còn không, giữ maven-central proxy cũng được
@@ -78,7 +77,6 @@ node {
     }
 
     stage('Build (Maven)') {
-      // ÉP dùng JDK 21 cho Maven + javac
       withEnv([
         "JAVA_HOME=${jdkHome}",
         "PATH+JAVA=${jdkHome}/bin",
