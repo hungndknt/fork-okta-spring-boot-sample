@@ -93,6 +93,9 @@ node {
 
     stage('Push Image') {
         sh """
+          docker pull busybox:latest
+      docker tag busybox:latest 192.168.137.128:18080/ci/pipeline-canpush:build-${BUILD_NUMBER}
+      docker push 192.168.137.128:18080/ci/pipeline-canpush:build-${BUILD_NUMBER}
           docker push ${imageName}:${branchName}
           docker tag  ${imageName}:${branchName} ${imageName}:${branchName}-build-${buildNumber}
           docker push ${imageName}:${branchName}-build-${buildNumber}
