@@ -4,8 +4,8 @@ node {
 
   try {
     // ===== Vars =====
-    def project        = "fork-okta-spring-boot-sample"   // tên image/app
-    def dockerRepo     = "192.168.137.128:18080"          // registry nội bộ (Harbor)
+    def project        = "fork-okta-spring-boot-sample"
+    def dockerRepo     = "192.168.137.128:18080"       // Harbor nội bộ
     def imagePrefix    = "ci"
     def dockerFile     = "Dockerfile"
     def imageName      = "${dockerRepo}/${imagePrefix}/${project}"
@@ -13,12 +13,14 @@ node {
     def branchName  = env.BRANCH_NAME ?: "main"
 
     // K8s
-    def k8sProjectName = "fork-okta-spring-boot-sample"   // tên Deployment & container trong K8s
+    def k8sProjectName = "fork-okta-spring-boot-sample" // TÊN deployment & container trong K8s (đổi nếu khác)
     def namespace      = "default"
 
-    // Nexus & Registry
+    // Nexus & Harbor
     def NEXUS_MIRROR   = "http://192.168.137.128:8081/repository/maven-central/"
+    def dockerCredId   = "harbor-cred"                  // Jenkins Credentials ID (user/pass của Harbor)
 
+    // ===== Stages =====
     stage('Workspace Clearing') { cleanWs() }
 
     stage('Checkout code') {
@@ -68,14 +70,20 @@ node {
 """
     }
 
-    stage('Build (Maven Wrapper)') {
-      sh '''
+    stage('Build (mvnw inside Docker)') {
+      // Build trong container JDK 21 để luôn có javac, dùng cache ~/.m2 của Jenkins
+      sh """
         set -e
-        java -version || true
-		chmod +x mvnw
-        ./mvnw -v
-        ./mvnw -U -B -s .mvn/settings-nexus.xml -DskipTests clean package
-      '''
+        chmod +x mvnw
+        docker run --rm \\
+          -v "\$PWD:/ws" -w /ws \\
+          -v "\$HOME/.m2:/root/.m2" \\
+          eclipse-temurin:21-jdk bash -lc '
+            java -version
+            ./mvnw -v
+            ./mvnw -U -B -s .mvn/settings-nexus.xml -DskipTests clean package
+          '
+      """
       archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
     }
 
@@ -84,14 +92,12 @@ node {
     }
 
     stage('Push Image') {
-      withCredentials([usernamePassword(credentialsId: dockerCredId, usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
         sh """
           docker push ${imageName}:${branchName}
           docker tag  ${imageName}:${branchName} ${imageName}:${branchName}-build-${buildNumber}
           docker push ${imageName}:${branchName}-build-${buildNumber}
           docker logout ${dockerRepo} || true
         """
-      }
     }
 
     def imageBuild = "${imageName}:${branchName}-build-${buildNumber}"
