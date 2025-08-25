@@ -1,37 +1,45 @@
-// Jenkinsfile
-pipeline {
-  agent any
+#!/usr/bin/env groovy
+node {
+  properties([disableConcurrentBuilds()])
 
-  options {
-    disableConcurrentBuilds()
-    buildDiscarder(logRotator(numToKeepStr: '20'))
-    timestamps()
-  }
+  try {
+    // ===== Vars =====
+    def project        = "fork-okta-spring-boot-sample"          // tên image/app
+    def dockerRepo     = "192.168.137.128:18080"            // registry nội bộ (Harbor)
+    def imagePrefix    = "ci"
+    def dockerFile     = "Dockerfile"
+    def imageName      = "${dockerRepo}/${imagePrefix}/${project}"
+    def buildNumber    = env.BUILD_NUMBER
+    def branchNameRaw  = env.BRANCH_NAME ?: "main"
+    // sanitize tag cho an toàn
+    def branchName     = branchNameRaw.replaceAll('[^A-Za-z0-9_.-]','-')
 
-  environment {
-    MAVEN_TOOL              = 'apache-maven-3.9.11'
-    NEXUS_MIRROR            = 'http://192.168.137.128:8081/repository/maven-central/
-    REGISTRY                = '192.168.137.128:18080'
-    IMAGE_NAMESPACE         = 'ci'
-    IMAGE_NAME              = 'okta-spring-boot-sample'
-    #REGISTRY_CREDENTIALS_ID = 'harbor-cred'                  // Jenkins Credentials (username+password) để login registry
-  }
+    // K8s
+    def k8sProjectName = "fork-okta-spring-boot-sample"      // tên Deployment & container trong K8s
+    def namespace      = "default"
 
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout scm
-        sh 'mkdir -p .mvn'
+    // Maven tool
+    def mvnHome = tool 'apache-maven-3.9.11'
+
+    // Nexus & Registry credentials
+    def NEXUS_MIRROR   = "http://192.168.137.128:8081/repository/maven-central/"
+#    def dockerCredId   = "harbor-cred"   // Jenkins Credentials ID (username+password)
+
+    stage('Workspace Clearing') { cleanWs() }
+
+    stage('Checkout code') {
+      checkout scm
+      if (env.BRANCH_NAME) {
+        sh "git fetch --all --prune && git checkout -B ${branchName} origin/${branchName} && git reset --hard origin/${branchName}"
+      } else {
+        echo "No BRANCH_NAME; using currently checked out commit."
       }
     }
 
-    stage('Prepare Maven settings (Nexus mirror)') {
-      steps {
-        writeFile file: '.mvn/settings-nexus.xml', text: """
-<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
-          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
-                              https://maven.apache.org/xsd/settings-1.0.0.xsd">
+    stage('Prepare Maven settings (Nexus)') {
+      sh 'mkdir -p .mvn'
+      writeFile file: '.mvn/settings-nexus.xml', text: """
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
   <mirrors>
     <mirror>
       <id>internal-nexus</id>
@@ -66,53 +74,45 @@ pipeline {
   </activeProfiles>
 </settings>
 """
-      }
+      sh 'ls -la .mvn && echo "===== settings-nexus.xml =====" && cat .mvn/settings-nexus.xml'
     }
 
-    stage('Build JAR (Maven)') {
-      steps {
-        script {
-          def mvnHome = tool name: env.MAVEN_TOOL, type: 'maven'
-          env.PATH = "${mvnHome}/bin:${env.PATH}"
-        }
-        // Build + test; nếu muốn bỏ test: thêm -DskipTests
-        sh 'mvn -B -s .mvn/settings-nexus.xml clean package'
+    stage('Build (Maven)') {
+      withEnv(["PATH+MAVEN=${mvnHome}/bin"]) {
+        sh "mvn -v"
+        // Nếu muốn chạy test: bỏ -DskipTests
+        sh "mvn -U -B -s .mvn/settings-nexus.xml -DskipTests clean package"
       }
-      post {
-        success {
-          archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
-        }
-      }
+      archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
     }
 
     stage('Docker Build') {
-      steps {
-        script {
-          def safeBranch = (env.BRANCH_NAME ?: 'local').replaceAll('[^A-Za-z0-9_.-]','-')
-          env.IMAGE_TAG  = "${REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}:${safeBranch}-${env.BUILD_NUMBER}"
-        }
+      sh "docker build -t ${imageName}:${branchName} -f ${dockerFile} ."
+    }
+
+    stage('Push Image') {
         sh """
-          docker build -t "${IMAGE_TAG}" .
+          docker push ${imageName}:${branchName}
+          docker tag  ${imageName}:${branchName} ${imageName}:${branchName}-build-${buildNumber}
+          docker push ${imageName}:${branchName}-build-${buildNumber}
+          docker logout ${dockerRepo} || true
         """
-      }
     }
 
-    stage('Docker Push') {
-      steps {
-        withCredentials([usernamePassword(credentialsId: env.REGISTRY_CREDENTIALS_ID, usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
-          sh '''
-            echo "$REG_PASS" | docker login ${REGISTRY} --username "$REG_USER" --password-stdin
-            docker push "${IMAGE_TAG}"
-            docker logout ${REGISTRY} || true
-          '''
-        }
-      }
-    }
-  }
+    def imageBuild = "${imageName}:${branchName}-build-${buildNumber}"
+    echo "Pushed: ${imageBuild}"
 
-  post {
-    always {
-      echo "Built & pushed: ${IMAGE_TAG}"
+    stage('Deploy to K8s') {
+      sh """#!/bin/bash -e
+        echo "Deploying ${imageBuild} to ${namespace}/${k8sProjectName}"
+        kubectl -n ${namespace} get deploy ${k8sProjectName} -o name
+        kubectl -n ${namespace} set image deployment/${k8sProjectName} ${k8sProjectName}=${imageBuild}
+        kubectl -n ${namespace} rollout status deployment/${k8sProjectName}
+      """
     }
+
+  } catch (e) {
+    currentBuild.result = "FAILED"
+    throw e
   }
 }
