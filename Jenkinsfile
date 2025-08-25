@@ -18,7 +18,7 @@ node {
 
     // Nexus & Harbor
     def NEXUS_MIRROR   = "http://192.168.137.128:8081/repository/maven-central/"
-    def dockerCredId   = "harbor-cred"                  // Jenkins Credentials ID (user/pass của Harbor)
+    def dockerCredId   = "Harbor"                
 
     // ===== Stages =====
     stage('Workspace Clearing') { cleanWs() }
