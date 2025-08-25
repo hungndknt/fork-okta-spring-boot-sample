@@ -9,10 +9,9 @@ pipeline {
   }
 
   environment {
-    // ====== Tùy chỉnh theo môi trường của bạn ======
-    MAVEN_TOOL              = 'apache-maven-3.9.11'          // Tên Maven tool trên Jenkins
+    MAVEN_TOOL              = 'apache-maven-3.9.11'
     NEXUS_MIRROR            = 'http://192.168.137.128:8081/repository/maven-central/
-    REGISTRY                = '192.168.137.128:18080'        // Harbor/registry nội bộ
+    REGISTRY                = '192.168.137.128:18080'
     IMAGE_NAMESPACE         = 'ci'
     IMAGE_NAME              = 'okta-spring-boot-sample'
     #REGISTRY_CREDENTIALS_ID = 'harbor-cred'                  // Jenkins Credentials (username+password) để login registry
