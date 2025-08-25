@@ -4,25 +4,20 @@ node {
 
   try {
     // ===== Vars =====
-    def project        = "fork-okta-spring-boot-sample"     // tên image/app
-    def dockerRepo     = "192.168.137.128:18080"            // registry nội bộ (Harbor)
+    def project        = "fork-okta-spring-boot-sample"   // tên image/app
+    def dockerRepo     = "192.168.137.128:18080"          // registry nội bộ (Harbor)
     def imagePrefix    = "ci"
     def dockerFile     = "Dockerfile"
     def imageName      = "${dockerRepo}/${imagePrefix}/${project}"
     def buildNumber    = env.BUILD_NUMBER
-    def branchNameRaw  = env.BRANCH_NAME ?: "main"
+    def branchName  = env.BRANCH_NAME ?: "main"
 
     // K8s
-    def k8sProjectName = "fork-okta-spring-boot-sample"     // tên Deployment & container trong K8s
+    def k8sProjectName = "fork-okta-spring-boot-sample"   // tên Deployment & container trong K8s
     def namespace      = "default"
 
-    // Maven & JDK tools
-    def mvnHome = tool 'apache-maven-3.9.11'
-
-    // Nexus & Registry credentials
-    // Nên dùng group "maven-public" nếu bạn đã tạo; còn không, giữ maven-central proxy cũng được
+    // Nexus & Registry
     def NEXUS_MIRROR   = "http://192.168.137.128:8081/repository/maven-central/"
-    def dockerCredId   = "harbor-cred"                      // Credentials ID (user/pass) của Harbor
 
     stage('Workspace Clearing') { cleanWs() }
 
@@ -68,24 +63,18 @@ node {
       </pluginRepositories>
     </profile>
   </profiles>
-  <activeProfiles>
-    <activeProfile>nexus</activeProfile>
-  </activeProfiles>
+  <activeProfiles><activeProfile>nexus</activeProfile></activeProfiles>
 </settings>
 """
-      sh 'ls -la .mvn && echo "===== settings-nexus.xml =====" && cat .mvn/settings-nexus.xml'
     }
 
-    stage('Build (Maven)') {
-      withEnv([
-        "JAVA_HOME=${jdkHome}",
-        "PATH+JAVA=${jdkHome}/bin",
-        "PATH+MAVEN=${mvnHome}/bin"
-      ]) {
-        sh "echo JAVA_HOME=$JAVA_HOME && java -version && javac -version"
-        sh "mvn -v"
-        sh "mvn -U -B -s .mvn/settings-nexus.xml -DskipTests clean package"
-      }
+    stage('Build (Maven Wrapper)') {
+      sh '''
+        set -e
+        java -version || true
+        ./mvnw -v
+        ./mvnw -U -B -s .mvn/settings-nexus.xml -DskipTests clean package
+      '''
       archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
     }
 
@@ -93,7 +82,8 @@ node {
       sh "docker build -t ${imageName}:${branchName} -f ${dockerFile} ."
     }
 
-    stage('Push Image')  {
+    stage('Push Image') {
+      withCredentials([usernamePassword(credentialsId: dockerCredId, usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
         sh """
           echo "\$REG_PASS" | docker login ${dockerRepo} --username "\$REG_USER" --password-stdin
           docker push ${imageName}:${branchName}
@@ -102,7 +92,7 @@ node {
           docker logout ${dockerRepo} || true
         """
       }
-
+    }
 
     def imageBuild = "${imageName}:${branchName}-build-${buildNumber}"
     echo "Pushed: ${imageBuild}"
