@@ -72,6 +72,7 @@ node {
       sh '''
         set -e
         java -version || true
+		chmod +x mvnw
         ./mvnw -v
         ./mvnw -U -B -s .mvn/settings-nexus.xml -DskipTests clean package
       '''
@@ -85,7 +86,6 @@ node {
     stage('Push Image') {
       withCredentials([usernamePassword(credentialsId: dockerCredId, usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
         sh """
-          echo "\$REG_PASS" | docker login ${dockerRepo} --username "\$REG_USER" --password-stdin
           docker push ${imageName}:${branchName}
           docker tag  ${imageName}:${branchName} ${imageName}:${branchName}-build-${buildNumber}
           docker push ${imageName}:${branchName}-build-${buildNumber}
