@@ -4,23 +4,26 @@ node {
 
   try {
     // ===== Vars =====
-    def project        = "fork-okta-spring-boot-sample"          // tên image/app
+    def project        = "fork-okta-spring-boot-sample"     // tên image/app
     def dockerRepo     = "192.168.137.128:18080"            // registry nội bộ (Harbor)
     def imagePrefix    = "ci"
     def dockerFile     = "Dockerfile"
     def imageName      = "${dockerRepo}/${imagePrefix}/${project}"
     def buildNumber    = env.BUILD_NUMBER
-    def branchName  = env.BRANCH_NAME ?: "main"
+    def branchNameRaw  = env.BRANCH_NAME ?: "main"
 
     // K8s
-    def k8sProjectName = "fork-okta-spring-boot-sample"      // tên Deployment & container trong K8s
+    def k8sProjectName = "fork-okta-spring-boot-sample"     // tên Deployment & container trong K8s
     def namespace      = "default"
 
-    // Maven tool
+    // Maven & JDK tools
     def mvnHome = tool 'apache-maven-3.9.11'
+    def jdkHome = tool name: 'jdk-21', type: 'jdk'          // bạn đã có Java 21 trên agent
 
     // Nexus & Registry credentials
+    // Nên dùng group "maven-public" nếu bạn đã tạo; còn không, giữ maven-central proxy cũng được
     def NEXUS_MIRROR   = "http://192.168.137.128:8081/repository/maven-central/"
+    def dockerCredId   = "harbor-cred"                      // Credentials ID (user/pass) của Harbor
 
     stage('Workspace Clearing') { cleanWs() }
 
@@ -75,9 +78,14 @@ node {
     }
 
     stage('Build (Maven)') {
-      withEnv(["PATH+MAVEN=${mvnHome}/bin"]) {
+      // ÉP dùng JDK 21 cho Maven + javac
+      withEnv([
+        "JAVA_HOME=${jdkHome}",
+        "PATH+JAVA=${jdkHome}/bin",
+        "PATH+MAVEN=${mvnHome}/bin"
+      ]) {
+        sh "echo JAVA_HOME=$JAVA_HOME && java -version && javac -version"
         sh "mvn -v"
-        // Nếu muốn chạy test: bỏ -DskipTests
         sh "mvn -U -B -s .mvn/settings-nexus.xml -DskipTests clean package"
       }
       archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
@@ -87,14 +95,16 @@ node {
       sh "docker build -t ${imageName}:${branchName} -f ${dockerFile} ."
     }
 
-    stage('Push Image') {
+    stage('Push Image')  {
         sh """
+          echo "\$REG_PASS" | docker login ${dockerRepo} --username "\$REG_USER" --password-stdin
           docker push ${imageName}:${branchName}
           docker tag  ${imageName}:${branchName} ${imageName}:${branchName}-build-${buildNumber}
           docker push ${imageName}:${branchName}-build-${buildNumber}
           docker logout ${dockerRepo} || true
         """
-    }
+      }
+
 
     def imageBuild = "${imageName}:${branchName}-build-${buildNumber}"
     echo "Pushed: ${imageBuild}"
