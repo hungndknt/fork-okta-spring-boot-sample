@@ -98,7 +98,7 @@ node {
       sh """
         set -e
         docker logout 192.168.137.128:18080 || true
-		docker login 192.168.137.128:18080 --username "$REG_USER" --password "$REG_PASS"
+		echo "$REG_PASS" | docker login 192.168.137.128:18080 --username "$REG_USER" --password-stdin
         docker push ${imageName}:${branchName}
         docker tag ${imageName}:${branchName} ${imageName}:${branchName}-build-${buildNumber}
         docker push ${imageName}:${branchName}-build-${buildNumber}
