@@ -5,7 +5,7 @@ node {
   try {
     // ===== Vars =====
     def project        = "fork-okta-spring-boot-sample"
-    def dockerRepo     = "192.168.137.128:18080"       // Harbor nội bộ
+    def dockerRepo     = "192.168.137.128:18080"
     def imagePrefix    = "ci"
     def dockerFile     = "Dockerfile"
     def imageName      = "${dockerRepo}/${imagePrefix}/${project}"
@@ -13,12 +13,11 @@ node {
     def branchName  = env.BRANCH_NAME ?: "main"
 
     // K8s
-    def k8sProjectName = "fork-okta-spring-boot-sample" // TÊN deployment & container trong K8s (đổi nếu khác)
+    def k8sProjectName = "fork-okta-spring-boot-sample"
     def namespace      = "default"
 
     // Nexus & Harbor
     def NEXUS_MIRROR   = "http://192.168.137.128:8081/repository/maven-central/"
-    def dockerCredId   = "harbor-cred"                  // Jenkins Credentials ID (user/pass của Harbor)
 
     // ===== Stages =====
     stage('Workspace Clearing') { cleanWs() }
@@ -71,7 +70,6 @@ node {
     }
 
     stage('Build (mvnw inside Docker)') {
-      // Build trong container JDK 21 để luôn có javac, dùng cache ~/.m2 của Jenkins
       sh """
         set -e
         chmod +x mvnw
@@ -91,13 +89,21 @@ node {
       sh "docker build -t ${imageName}:${branchName} -f ${dockerFile} ."
     }
 
-    stage('Push Image') {
-        sh """
-          docker push ${imageName}:${branchName}
-          docker tag  ${imageName}:${branchName} ${imageName}:${branchName}-build-${buildNumber}
-          docker push ${imageName}:${branchName}-build-${buildNumber}
-          docker logout ${dockerRepo} || true
-        """
+  stage('Push Image') {
+      withEnv(['DOCKER_CONFIG=.docker']) {
+        sh 'mkdir -p .docker'
+        withCredentials([usernamePassword(credentialsId: 'Harbor', usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
+          sh """
+            set -e
+            docker logout 192.168.137.128:18080 || true
+			docker login 192.168.137.128:18080 --username "$REG_USER" --password "$REG_PASS"
+            docker push ${imageName}:${branchName}
+            docker tag  ${imageName}:${branchName} ${imageName}:${branchName}-build-${buildNumber}
+            docker push ${imageName}:${branchName}-build-${buildNumber}
+            docker logout 192.168.137.128:18080 || true
+          """
+        }
+      }
     }
 
     def imageBuild = "${imageName}:${branchName}-build-${buildNumber}"
