@@ -91,21 +91,21 @@ node {
     }
 
 	stage('Push Image') {
-	withEnv(['DOCKER_CONFIG=.docker']) {
-    sh 'mkdir -p .docker'
-    withCredentials([usernamePassword(credentialsId: 'Harbor', usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
-      sh """
-        set -e
-        docker logout 192.168.137.128:18080 || true
-		echo "$REG_PASS" | docker login 192.168.137.128:18080 --username 'robot$jenkins' --password-stdin
-        docker push ${imageName}:${branchName}
-        docker tag ${imageName}:${branchName} ${imageName}:${branchName}-build-${buildNumber}
-        docker push ${imageName}:${branchName}-build-${buildNumber}
-        docker logout 192.168.137.128:18080 || true
-      """
+      withEnv(['DOCKER_CONFIG=.docker']) {
+        sh 'mkdir -p .docker && echo "{}" > .docker/config.json'
+        withCredentials([usernamePassword(credentialsId: dockerCredId, usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
+          sh """
+            set -e
+            docker logout 192.168.137.128:18080 || true
+            echo "\$REG_PASS" | docker login 192.168.137.128:18080 --username "\$REG_USER" --password-stdin
+            docker push ${imageName}:${branchName}
+            docker tag  ${imageName}:${branchName} ${imageName}:${branchName}-build-${buildNumber}
+            docker push ${imageName}:${branchName}-build-${buildNumber}
+            docker logout 192.168.137.128:18080 || true
+          """
+        }
+      }
     }
-  }
-}
 
 
 
