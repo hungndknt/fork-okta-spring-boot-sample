@@ -18,6 +18,10 @@ node {
 
     // Nexus & Harbor
     def NEXUS_MIRROR   = "http://192.168.137.128:8081/repository/maven-central/"
+<<<<<<< HEAD
+=======
+    def dockerCredId   = "Harbor"                
+>>>>>>> 560b405dae2e8a270267b624ccf9185dcae24bbc
 
     // ===== Stages =====
     stage('Workspace Clearing') { cleanWs() }
@@ -90,6 +94,7 @@ node {
     }
 
   stage('Push Image') {
+<<<<<<< HEAD
       withEnv(['DOCKER_CONFIG=.docker']) {
         sh 'mkdir -p .docker'
         withCredentials([usernamePassword(credentialsId: 'Harbor', usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
@@ -97,6 +102,16 @@ node {
             set -e
             docker logout 192.168.137.128:18080 || true
 			docker login 192.168.137.128:18080 --username "$REG_USER" --password "$REG_PASS"
+=======
+      // Gọn sạch: dùng DOCKER_CONFIG riêng cho job, login đúng server string, push & logout
+      withEnv(['DOCKER_CONFIG=.docker']) {
+        sh 'mkdir -p .docker && echo "{}" > .docker/config.json'
+        withCredentials([usernamePassword(credentialsId: dockerCredId, usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
+          sh """
+            set -e
+            docker logout 192.168.137.128:18080 || true
+            echo "\$REG_PASS" | docker login 192.168.137.128:18080 --username "\$REG_USER" --password-stdin
+>>>>>>> 560b405dae2e8a270267b624ccf9185dcae24bbc
             docker push ${imageName}:${branchName}
             docker tag  ${imageName}:${branchName} ${imageName}:${branchName}-build-${buildNumber}
             docker push ${imageName}:${branchName}-build-${buildNumber}
@@ -105,6 +120,7 @@ node {
         }
       }
     }
+
 
     def imageBuild = "${imageName}:${branchName}-build-${buildNumber}"
     echo "Pushed: ${imageBuild}"
