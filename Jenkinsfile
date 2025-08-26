@@ -18,6 +18,7 @@ node {
 
     // Nexus & Harbor
     def NEXUS_MIRROR   = "http://192.168.137.128:8081/repository/maven-central/"
+	def dockerCredId   = "Harbor" 
 
     stage('Workspace Clearing') { cleanWs() }
 
