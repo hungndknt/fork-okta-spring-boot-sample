@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fork-okta-spring-boot-sample
+  labels:
+    app: fork-okta-spring-boot-sample
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fork-okta-spring-boot-sample
+  template:
+    metadata:
+      labels:
+        app: fork-okta-spring-boot-sample
+    spec:
+      tolerations:
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
+      containers:
+      - name: fork-okta-spring-boot-sample
+        image: 192.168.137.128:18080/ci/fork-okta-spring-boot-sample:main-build-10
+        envFrom:
+        - secretRef:
+            name: okta-oidc
+
