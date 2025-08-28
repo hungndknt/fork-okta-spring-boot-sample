@@ -3,7 +3,7 @@ node {
   properties([disableConcurrentBuilds()])
 
   try {
-    // ===== Vars =====
+
     def project        = "fork-okta-spring-boot-sample"
     def dockerRepo     = "192.168.137.128:18080"
     def imagePrefix    = "ci"
@@ -12,13 +12,14 @@ node {
     def buildNumber    = env.BUILD_NUMBER
     def branchName  = env.BRANCH_NAME ?: "main"
 
-    // K8s
+
     def k8sProjectName = "fork-okta-spring-boot-sample"
     def namespace      = "default"
 
-    // Nexus & Harbor
+
     def NEXUS_MIRROR   = "http://192.168.137.128:8081/repository/maven-central/"
 	def dockerCredId   = "Harbor" 
+	def SONAR_SERVER = "SonarQube" 
 
     stage('Workspace Clearing') { cleanWs() }
 
@@ -71,20 +72,38 @@ node {
 """
     }
 
-    stage('Build (mvnw inside Docker)') {
-      sh """
-        set -e
-        chmod +x mvnw
-        docker run --rm \\
-          -v "\$PWD:/ws" -w /ws \\
-          -v "\$HOME/.m2:/root/.m2" \\
-          eclipse-temurin:21-jdk bash -lc '
-            java -version
-            ./mvnw -v
-            ./mvnw -U -B -s .mvn/settings-nexus.xml -DskipTests clean package
-          '
-      """
+    stage('Unit test + SonarQube Analysis') {
+      withSonarQubeEnv("${SONAR_SERVER}") {
+        sh """
+          set -e
+          chmod +x mvnw
+          docker run --rm \
+            -e SONAR_HOST_URL="$SONAR_HOST_URL" \
+            -e SONAR_AUTH_TOKEN="$SONAR_AUTH_TOKEN" \
+            -v "\$PWD:/ws" -w /ws \
+            -v "\$HOME/.m2:/root/.m2" \
+            eclipse-temurin:21-jdk bash -lc '
+              java -version
+              ./mvnw -U -B -s .mvn/settings-nexus.xml \
+                clean verify sonar:sonar \
+                -DskipTests=false \
+                -Dsonar.projectKey=${project} \
+                -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+            '
+        """
+      }
+      junit 'target/surefire-reports/*.xml'
       archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+    }
+
+    stage('Quality Gate') {
+      // phải đặt ngoài withSonarQubeEnv
+      timeout(time: 10, unit: 'MINUTES') {
+        def qg = waitForQualityGate()
+        if (qg.status != 'OK') {
+          error "Quality Gate failed: ${qg.status}"
+        }
+      }
     }
 
     stage('Docker Build') {
