@@ -74,9 +74,9 @@ node {
 
     stage('Unit test + SonarQube Analysis') {
       withSonarQubeEnv("${SONAR_SERVER}") {
-        sh """
-          set -e
+        sh '''
           chmod +x mvnw
+		  test -n "$SONAR_HOST_URL" && test -n "$SONAR_AUTH_TOKEN" || { echo "Missing Sonar env"; exit 2; }
           docker run --rm \
             -e SONAR_HOST_URL="$SONAR_HOST_URL" \
             -e SONAR_AUTH_TOKEN="$SONAR_AUTH_TOKEN" \
