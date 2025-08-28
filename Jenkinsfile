@@ -92,7 +92,7 @@ node {
                 -Dsonar.projectKey=fork-okta-spring-boot-sample \
                 -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
             '
-        """
+        '''
       }
       junit 'target/surefire-reports/*.xml'
       archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
