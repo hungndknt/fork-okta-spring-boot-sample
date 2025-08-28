@@ -72,32 +72,33 @@ node {
 """
     }
 
-    stage('Unit test + SonarQube Analysis') {
-      withSonarQubeEnv("${SONAR_SERVER}") {
-        sh '''
-          chmod +x mvnw
-		  test -n "$SONAR_HOST_URL" && test -n "$SONAR_AUTH_TOKEN" || { echo "Missing Sonar env"; exit 2; }
-          docker run --rm \
-            -e SONAR_HOST_URL="$SONAR_HOST_URL" \
-            -e SONAR_AUTH_TOKEN="$SONAR_AUTH_TOKEN" \
-            -v "\$PWD:/ws" -w /ws \
-            -v "\$HOME/.m2:/root/.m2" \
-            eclipse-temurin:21-jdk bash -lc '
-              java -version
-              ./mvnw -U -B -s .mvn/settings-nexus.xml \
-				clean verify \
-			    org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-				-Dsonar.host.url=\\$SONAR_HOST_URL \
-				-Dsonar.token=\\$SONAR_TOKEN \
-				-Dsonar.login=\\$SONAR_TOKEN \
-                -Dsonar.projectKey=fork-okta-spring-boot-sample \
-                -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
-            '
-        '''
-      }
-      junit 'target/surefire-reports/*.xml'
-      archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
-    }
+stage('Unit test + SonarQube Analysis') {
+  withSonarQubeEnv('SonarQube') { // đúng tên server bạn khai báo
+    sh '''#!/bin/bash -e
+      chmod +x mvnw
+      # Kiểm tra env đã được inject
+      test -n "$SONAR_HOST_URL" && test -n "$SONAR_AUTH_TOKEN" || { echo "Missing SONAR env"; exit 2; }
+      echo "[OK] SONAR_HOST_URL=$SONAR_HOST_URL"
+      echo "[OK] SONAR_TOKEN length: ${#SONAR_AUTH_TOKEN}"
+
+      docker run --rm \
+        -e SONAR_HOST_URL="$SONAR_HOST_URL" \
+        -e SONAR_TOKEN="$SONAR_AUTH_TOKEN" \
+        -v "$PWD:/ws" -w /ws \
+        -v "$HOME/.m2:/root/.m2" \
+        eclipse-temurin:21-jdk bash -lc '
+          ./mvnw -U -B -s .mvn/settings-nexus.xml \
+            clean verify \
+            org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
+            -Dsonar.host.url="$SONAR_HOST_URL" \
+            -Dsonar.token="$SONAR_TOKEN" \
+            -Dsonar.projectKey=fork-okta-spring-boot-sample \
+            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+        '
+    '''
+  }
+  junit 'target/surefire-reports/*.xml'
+}
 
     stage('Quality Gate') {
       timeout(time: 10, unit: 'MINUTES') {
