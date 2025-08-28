@@ -87,8 +87,9 @@ node {
               ./mvnw -U -B -s .mvn/settings-nexus.xml \
 				clean verify \
 			    org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-				-Dsonar.host.url="$SONAR_HOST_URL" \
-				-Dsonar.token="$SONAR_TOKEN" \
+				-Dsonar.host.url=\\$SONAR_HOST_URL \
+				-Dsonar.token=\\$SONAR_TOKEN \
+				-Dsonar.login=\\$SONAR_TOKEN \
                 -Dsonar.projectKey=fork-okta-spring-boot-sample \
                 -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
             '
