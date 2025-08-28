@@ -85,8 +85,10 @@ node {
             eclipse-temurin:21-jdk bash -lc '
               java -version
               ./mvnw -U -B -s .mvn/settings-nexus.xml \
-                clean verify sonar:sonar \
-                -DskipTests=false \
+				clean verify \
+			    org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
+				-Dsonar.host.url="${SONAR_HOST_URL}" \
+				-Dsonar.token="${SONAR_TOKEN}" \
                 -Dsonar.projectKey=${project} \
                 -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
             '
@@ -97,7 +99,6 @@ node {
     }
 
     stage('Quality Gate') {
-      // phải đặt ngoài withSonarQubeEnv
       timeout(time: 10, unit: 'MINUTES') {
         def qg = waitForQualityGate()
         if (qg.status != 'OK') {
