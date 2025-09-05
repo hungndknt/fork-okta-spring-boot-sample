@@ -32,6 +32,7 @@ public class SecurityConfiguration {
         http.authorizeHttpRequests((requests) -> requests
             // allow anonymous access to the root page
             .requestMatchers("/").permitAll()
+			 .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
             // all other requests
             .anyRequest().authenticated());
         http.logout((logout) -> logout.logoutSuccessHandler(oidcLogoutSuccessHandler()));
