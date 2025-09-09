@@ -19,9 +19,36 @@ spec:
         operator: "Exists"
         effect: "NoSchedule"
       containers:
-      - name: fork-okta-spring-boot-sample
-        image: 192.168.137.128:18080/ci/fork-okta-spring-boot-sample:main-build-10
+      - env:
+        - name: JAVA_TOOL_OPTIONS
+          value: -javaagent:/otel/opentelemetry-javaagent.jar
+        - name: OTEL_SERVICE_NAME
+          value: okta-spring-svc
+        - name: OTEL_TRACES_EXPORTER
+          value: otlp
+        - name: OTEL_JAVAAGENT_LOGGING
+          value: none
+        - name: OTEL_METRICS_EXPORTER
+          value: otlp
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://192.168.137.128:4318
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: http/protobuf
+        - name: OTEL_INSTRUMENTATION_MICROMETER_ENABLED
+          value: "true"
         envFrom:
         - secretRef:
             name: okta-oidc
+      - name: fork-okta-spring-boot-sample
+        image: 192.168.137.128:18080/ci/fork-okta-spring-boot-sample:main-build-10
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /actuator/health/
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 2
 
